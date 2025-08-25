@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WebARナビ＋音声案内</title>
+<script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+<style>
+body{margin:0;overflow:hidden;}
+#info{position:absolute;top:10px;left:10px;background:white;padding:5px;z-index:10;}
+#audioControls{position:absolute;bottom:10px;left:10px;background:white;padding:5px;z-index:10;}
+</style>
+</head>
+<body>
+
+<div id="info">位置取得中...</div>
+<div id="audioControls">
+  <button id="playBtn" disabled>再生</button>
+  <button id="pauseBtn" disabled>停止</button>
+</div>
+
+<a-scene embedded arjs="sourceType: webcam;">
+  <a-box id="spot0" color="red" scale="0.5 0.5 0.5" visible="false"></a-box>
+  <a-box id="spot1" color="blue" scale="0.5 0.5 0.5" visible="false"></a-box>
+</a-scene>
+
+<audio id="audio0" src="./spot0.mp3" preload="auto"></audio>
+<audio id="audio1" src="./spot1.mp3" preload="auto"></audio>
+
+<script>
+let pos={lat:0,lon:0};
+let vel={x:0,y:0};
+let lastTime=null;
+let imuData={ax:0,ay:0};
+
+// --- IMU ---
+window.addEventListener("devicemotion", e=>{
+  imuData.ax=e.accelerationIncludingGravity.x||0;
+  imuData.ay=e.accelerationIncludingGravity.y||0;
+});
+
+// --- Kalman ---
+function kalmanUpdate(pred,gps,R=5){
+  return {lat:(pred.lat+gps.lat*R)/(1+R), lon:(pred.lon+gps.lon*R)/(1+R)};
+}
+
+// --- 距離計算 ---
+function getDistance(lat1,lon1,lat2,lon2){
+  const R=6371000;
+  const dLat=(lat2-lat1)*Math.PI/180;
+  const dLon=(lon2-lon1)*Math.PI/180;
+  const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+  return 2*R*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+
+// --- IMU予測 ---
+function imuPredict(pos,vel,dt){
+  return {lat:pos.lat+vel.x*dt/111111, lon:pos.lon+vel.y*dt/(111111*Math.cos(pos.lat*Math.PI/180))};
+}
+
+// --- マップマッチング ---
+function snapToRoad(pos,mapData){
+  let minDist=Infinity, nearest=pos;
+  mapData.features.forEach(f=>{
+    f.geometry.coordinates.forEach(c=>{
+      let d=getDistance(pos.lat,pos.lon,c[1],c[0]);
+      if(d<minDist){minDist=d; nearest={lat:c[1], lon:c[0]};}
+    });
+  });
+  return nearest;
+}
+
+// --- Mapデータ ---
+const mapData={"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"LineString","coordinates":[[139.5,35.5],[139.5005,35.5005]]}}]};
+
+// --- スポット ---
+const spots=[
+  {lat:35.5001,lon:139.5001,el:"#spot0",audio:"#audio0"},
+  {lat:35.5004,lon:139.5004,el:"#spot1",audio:"#audio1"}
+];
+
+const playBtn=document.getElementById("playBtn");
+const pauseBtn=document.getElementById("pauseBtn");
+
+let currentAudio=null;
+
+// --- GPS取得 ---
+if(navigator.geolocation){
+  navigator.geolocation.watchPosition(p=>{
+    const now=Date.now();
+    let dt=lastTime?(now-lastTime)/1000:0.1;
+    lastTime=now;
+
+    let pred=imuPredict(pos,vel,dt);
+    let fused=kalmanUpdate(pred,{lat:p.coords.latitude,lon:p.coords.longitude});
+    pos=snapToRoad(fused,mapData);
+
+    vel.x=(pos.lat-pred.lat)/dt*111111;
+    vel.y=(pos.lon-pred.lon)/dt*111111*Math.cos(pos.lat*Math.PI/180);
+
+    spots.forEach(s=>{
+      const dist=getDistance(pos.lat,pos.lon,s.lat,s.lon);
+      const el=document.querySelector(s.el);
+      const audio=document.querySelector(s.audio);
+
+      if(dist<20){ // 20m以内で表示・再生
+        el.setAttribute("visible","true");
+        el.setAttribute("position",`0 0 -${dist/2}`);
+        if(currentAudio!==audio){
+          if(currentAudio){currentAudio.pause();}
+          currentAudio=audio;
+          currentAudio.play();
+          playBtn.disabled=false;
+          pauseBtn.disabled=false;
+        }
+      }else{
+        el.setAttribute("visible","false");
+        if(currentAudio===audio){
+          currentAudio.pause();
+          currentAudio=null;
+          playBtn.disabled=true;
+          pauseBtn.disabled=true;
+        }
+      }
+    });
+
+    // 情報表示
+    const nextSpot=spots.find(s=>getDistance(pos.lat,pos.lon,s.lat,s.lon)>0);
+    const distText=nextSpot?getDistance(pos.lat,pos.lon,nextSpot.lat,nextSpot.lon).toFixed(1):"到達";
+    document.getElementById("info").innerText=`緯度:${pos.lat.toFixed(6)} 経度:${pos.lon.toFixed(6)} 次:${distText}m`;
+  },err=>{console.error(err);},{enableHighAccuracy:true});
+}
+
+// --- ボタン操作 ---
+playBtn.addEventListener("click",()=>{if(currentAudio) currentAudio.play();});
+pauseBtn.addEventListener("click",()=>{if(currentAudio) currentAudio.pause();});
+</script>
+
+</body>
+</html>
