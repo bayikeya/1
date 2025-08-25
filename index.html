@@ -22,10 +22,13 @@ body{margin:0;overflow:hidden;}
 <a-scene embedded arjs="sourceType: webcam;">
   <a-box id="spot0" color="red" scale="0.5 0.5 0.5" visible="false"></a-box>
   <a-box id="spot1" color="blue" scale="0.5 0.5 0.5" visible="false"></a-box>
+  <a-box id="spot2" color="yellow" scale="0.5 0.5 0.5" visible="false"></a-box>
 </a-scene>
 
-<audio id="audio0" src="./spot0.mp3" preload="auto"></audio>
-<audio id="audio1" src="./spot1.mp3" preload="auto"></audio>
+<audio id="audio0" src="./Cheery_Melodies.mp3" preload="auto"></audio>
+<audio id="audio1" src="./Cheery_Melodies.mp3" preload="auto"></audio>
+<audio id="audio2" src="./Cheery_Melodies.mp3" preload="auto"></audio>
+
 
 <script>
 let pos={lat:0,lon:0};
@@ -75,8 +78,9 @@ const mapData={"type":"FeatureCollection","features":[{"type":"Feature","geometr
 
 // --- スポット ---
 const spots=[
-  {lat:35.5001,lon:139.5001,el:"#spot0",audio:"#audio0"},
-  {lat:35.5004,lon:139.5004,el:"#spot1",audio:"#audio1"}
+  {lat:35.693281422506345,lon:140.05101608649414,el:"#spot0",audio:"#audio0"},
+  {lat:35.69338344217632,lon:140.05033002679568,el:"#spot1",audio:"#audio1"},
+  {lat:35.6938748901027,lon:140.05040814295302,el:"#spot2",audio:"#audio2"}
 ];
 
 const playBtn=document.getElementById("playBtn");
